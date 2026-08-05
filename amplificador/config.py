@@ -11,6 +11,8 @@ import os
 
 ANTHROPIC_API_KEY = ""  # pega aqui tu clave sk-ant-...
 NCBI_API_KEY = ""       # opcional: eleva el limite de NCBI de 3 a 10 solicitudes/segundo
+GEMINI_API_KEY = ""     # clave de Google AI Studio / Gemini API, usada por la auditoria bibliografica
+GEMINI_MODEL = ""       # opcional: fija un modelo (ej. "gemini-2.5-pro"); vacio = autodetectar
 
 
 def anthropic_api_key() -> str:
@@ -19,3 +21,11 @@ def anthropic_api_key() -> str:
 
 def ncbi_api_key() -> str:
     return NCBI_API_KEY or os.environ.get("NCBI_API_KEY", "")
+
+
+def gemini_api_key() -> str:
+    return GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY", "")
+
+
+def gemini_model() -> str:
+    return GEMINI_MODEL or os.environ.get("GEMINI_MODEL", "")

@@ -17,26 +17,34 @@ Completa tus claves en `amplificador/config.py`:
 
 ```python
 ANTHROPIC_API_KEY = "sk-ant-..."
-NCBI_API_KEY = ""  # opcional, eleva el limite de PubMed de 3 a 10 req/s
+NCBI_API_KEY = ""    # opcional, eleva el limite de PubMed de 3 a 10 req/s
+GEMINI_API_KEY = ""  # solo si vas a usar la auditoria bibliografica con Gemini
+GEMINI_MODEL = ""    # opcional, fija un modelo; vacio = autodetectar
 ```
 
-Si las dejas vacias, se usan las variables de entorno `ANTHROPIC_API_KEY`
-y `NCBI_API_KEY` como respaldo.
+Si las dejas vacias, se usan las variables de entorno `ANTHROPIC_API_KEY`,
+`NCBI_API_KEY`, `GEMINI_API_KEY` y `GEMINI_MODEL` como respaldo.
 
 ## Estructura del proyecto
 
 ```
 amplificador/
-  config.py         claves de API
-  cli.py             subcomandos (generar, actualizar, listar, mover, eliminar)
-  orthobullets.py     descarga/lectura del topic base
-  pubmed.py           busqueda y verificacion de bibliografia (E-utilities)
-  anthropic_client.py llamadas a la Messages API
-  redaccion.py        arma el prompt final y redacta la ficha
-  verificacion.py      valida que los PMID citados existan
-  catalog.py           indice jerarquico de fichas generadas
+  config.py            claves de API
+  cli.py                subcomandos de la CLI
+  orthobullets.py       descarga/lectura del topic base
+  pubmed.py             busqueda y verificacion de bibliografia (E-utilities)
+  anthropic_client.py   llamadas a la Messages API
+  gemini_client.py      auditoria bibliografica adversarial con Gemini
+  redaccion.py           arma el prompt final y redacta la ficha
+  verificacion.py         valida que los PMID citados existan
+  catalog.py               indice jerarquico de fichas generadas
   prompts/prompt_sistema.md  prompt de sistema (rol, esqueleto, reglas)
-temas/                 fichas generadas + catalogo.json (se crea al usar la CLI)
+temas/                     fichas generadas + catalogo.json (se crea al usar la CLI)
+.claude/commands/
+  ficha-medica-orthobullets.md   skill de Claude Code que orquesta todo el
+                                  flujo (busqueda agentica + verificacion
+                                  estructurada + auditoria Gemini + registro
+                                  en el catalogo) para un tema dado
 ```
 
 Cada ficha se guarda como Markdown junto a un `.refs.json` con las
@@ -99,11 +107,40 @@ python -m amplificador mover osteomielitis-aguda-pediatrica --categoria "Infecci
 python -m amplificador eliminar osteomielitis-aguda-pediatrica
 ```
 
+### Generar una ficha con el skill agentico (`/ficha-medica-orthobullets`)
+
+Para fichas mas exhaustivas y auditadas (inventario completo del topic,
+busqueda agentica en PubMed/guias/literatura chilena, auditoria adversarial
+con Gemini, control de calidad determinista), usa el skill de Claude Code
+en `.claude/commands/ficha-medica-orthobullets.md`:
+
+```
+/ficha-medica-orthobullets fractura supracondilea de humero en ninos --categoria "Trauma/Extremidad superior"
+```
+
+Este skill no reemplaza al comando `generar`: es un flujo mas lento y
+minucioso, pensado para temas donde vale la pena la profundidad extra. Usa
+los mismos subcomandos de bajo nivel del paquete `amplificador` en vez de
+reimplementar busqueda o verificacion:
+
+| Comando | Para que sirve |
+|---|---|
+| `python -m amplificador rutas TEMA --categoria RUTA` | Calcula donde debe quedar la ficha final dentro del catalogo, antes de escribirla. |
+| `python -m amplificador pubmed-buscar "CONSULTA" -n N` | Busca PMID candidatos (solo IDs, rapido). |
+| `python -m amplificador pubmed-detalles PMID [PMID ...]` | Verifica que un PMID exista y trae sus metadatos/resumen. |
+| `python -m amplificador orthobullets-descargar --url URL` | Descarga y limpia el HTML publico de un topic ya localizado. |
+| `python -m amplificador gemini-auditar --stage pre\|post --input IN.json --output OUT.json` | Ejecuta la auditoria bibliografica adversarial con Gemini. |
+| `python -m amplificador registrar TEMA --categoria RUTA --archivo FICHA.md --refs REFS.json` | Registra en `catalogo.json` una ficha ya escrita en disco. |
+
 ## Notas
 
 - `amplificador/config.py` se sube al repositorio con las claves en texto
   plano, pensado para un repositorio privado de uso personal. Si el
   repositorio deja de ser privado, rota las claves antes.
 - El prompt de sistema (`amplificador/prompts/prompt_sistema.md`) define
-  el rol, el esqueleto de la ficha, las reglas de veracidad y de citado.
-  Ajustalo ahi si necesitas cambiar la estructura de salida.
+  el rol, el esqueleto de la ficha, las reglas de veracidad y de citado
+  para el flujo del comando `generar`. Ajustalo ahi si necesitas cambiar
+  esa estructura de salida.
+- Gemini nunca se usa como fuente citable: solo detecta omisiones y
+  propone referencias candidatas, que siempre se verifican de forma
+  independiente contra PubMed antes de incorporarlas.

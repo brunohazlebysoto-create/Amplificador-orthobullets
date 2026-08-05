@@ -2,11 +2,12 @@ import argparse
 import json
 from pathlib import Path
 
+from . import gemini_client
 from .catalog import Catalogo
-from .orthobullets import cargar_base
-from .pubmed import bibliografia
+from .orthobullets import cargar_base, descargar
+from .pubmed import bibliografia, buscar_pmids, detalles
 from .redaccion import redactar, PROMPT_DEFECTO
-from .utils import log
+from .utils import log, slugify
 from .verificacion import verificar_citas
 
 
@@ -112,6 +113,71 @@ def _eliminar(args: argparse.Namespace) -> None:
     print(f"eliminado: {args.slug}")
 
 
+def _rutas(args: argparse.Namespace) -> None:
+    """Calcula (y crea) las rutas jerarquicas para un tema+categoria, sin escribir nada.
+
+    Pensado para que un skill agentico (ej. Claude Code) sepa exactamente donde
+    debe escribir la ficha final y su archivo de referencias antes de redactarlos.
+    """
+    catalogo = Catalogo(Path(args.salida))
+    categoria = _categoria_desde_texto(args.categoria)
+    ficha_ruta, refs_ruta = catalogo.rutas(args.tema, categoria)
+    print(json.dumps({
+        "slug": slugify(args.tema),
+        "ficha": str(ficha_ruta),
+        "refs": str(refs_ruta),
+    }, ensure_ascii=False))
+
+
+def _pubmed_buscar(args: argparse.Namespace) -> None:
+    ids = buscar_pmids(args.consulta, args.n)
+    print(json.dumps(ids, ensure_ascii=False))
+
+
+def _pubmed_detalles(args: argparse.Namespace) -> None:
+    refs = detalles(args.pmids)
+    print(json.dumps(refs, ensure_ascii=False, indent=2))
+
+
+def _orthobullets_descargar(args: argparse.Namespace) -> None:
+    contenido, procedencia = descargar(args.url)
+    print(json.dumps({"contenido": contenido, "procedencia": procedencia}, ensure_ascii=False))
+
+
+def _gemini_auditar(args: argparse.Namespace) -> None:
+    entrada = json.loads(Path(args.input).read_text(encoding="utf-8"))
+    try:
+        resultado = gemini_client.auditar(args.stage, entrada, modelo=args.modelo)
+    except RuntimeError as e:
+        Path(args.output).write_text(
+            json.dumps({"error": str(e), "_etapa": args.stage}, ensure_ascii=False, indent=2),
+            encoding="utf-8")
+        print(json.dumps({"estado": "fallida", "error": str(e)}, ensure_ascii=False))
+        raise SystemExit(1)
+    Path(args.output).write_text(
+        json.dumps(resultado, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(json.dumps({"estado": "ejecutada", "modelo": resultado.get("_modelo")},
+                     ensure_ascii=False))
+
+
+def _registrar(args: argparse.Namespace) -> None:
+    """Registra en el catalogo una ficha que un skill agentico ya escribio en disco."""
+    catalogo = Catalogo(Path(args.salida))
+    categoria = _categoria_desde_texto(args.categoria)
+    ficha_ruta = Path(args.archivo)
+    refs_ruta = Path(args.refs)
+
+    refs_data = json.loads(refs_ruta.read_text(encoding="utf-8"))
+    refs = refs_data["referencias"] if isinstance(refs_data, dict) and "referencias" in refs_data else refs_data
+
+    texto = ficha_ruta.read_text(encoding="utf-8")
+    reporte = verificar_citas(texto, refs)
+
+    entrada = catalogo.registrar(args.tema, categoria, args.procedencia, args.modelo,
+                                  args.extra or [], len(refs), ficha_ruta, refs_ruta, reporte)
+    print(json.dumps({"entrada": entrada, "verificacion": reporte}, ensure_ascii=False, indent=2))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         prog="amplificador",
@@ -155,6 +221,48 @@ def main() -> None:
     e.add_argument("slug")
     e.add_argument("--salida", default="temas")
     e.set_defaults(func=_eliminar)
+
+    # --- subcomandos de bajo nivel, pensados para que un skill agentico ---
+    # --- (ej. Claude Code) los invoque como building blocks, en vez de   ---
+    # --- reimplementar busqueda/verificacion/catalogacion por su cuenta. ---
+
+    r = sub.add_parser("rutas", help="calcula las rutas de archivo para tema+categoria en el catalogo")
+    r.add_argument("tema")
+    r.add_argument("--categoria")
+    r.add_argument("--salida", default="temas")
+    r.set_defaults(func=_rutas)
+
+    pb = sub.add_parser("pubmed-buscar", help="busca PMID en PubMed (esearch, solo IDs)")
+    pb.add_argument("consulta")
+    pb.add_argument("-n", type=int, default=20, dest="n")
+    pb.set_defaults(func=_pubmed_buscar)
+
+    pd = sub.add_parser("pubmed-detalles", help="obtiene metadatos y resumen de PMID especificos")
+    pd.add_argument("pmids", nargs="+")
+    pd.set_defaults(func=_pubmed_detalles)
+
+    od = sub.add_parser("orthobullets-descargar",
+                        help="descarga y limpia el HTML publico de una URL de topic ya localizada")
+    od.add_argument("--url", required=True)
+    od.set_defaults(func=_orthobullets_descargar)
+
+    ga = sub.add_parser("gemini-auditar", help="ejecuta una auditoria bibliografica (pre/post) con Gemini")
+    ga.add_argument("--stage", required=True, choices=["pre", "post"])
+    ga.add_argument("--input", required=True, help="archivo JSON con el contexto para Gemini")
+    ga.add_argument("--output", required=True, help="donde escribir la respuesta JSON de Gemini")
+    ga.add_argument("--modelo", default=None)
+    ga.set_defaults(func=_gemini_auditar)
+
+    rg = sub.add_parser("registrar", help="registra en el catalogo una ficha ya escrita en disco")
+    rg.add_argument("tema")
+    rg.add_argument("--categoria")
+    rg.add_argument("--archivo", required=True, help="ruta de la ficha .md ya escrita")
+    rg.add_argument("--refs", required=True, help="ruta del .refs.json ya escrito")
+    rg.add_argument("--procedencia", default="")
+    rg.add_argument("--modelo", default="claude-code (skill ficha-medica-orthobullets)")
+    rg.add_argument("--extra", action="append", default=None)
+    rg.add_argument("--salida", default="temas")
+    rg.set_defaults(func=_registrar)
 
     args = ap.parse_args()
     args.func(args)

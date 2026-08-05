@@ -20,6 +20,27 @@ def buscar_url(tema: str) -> str | None:
     return m.group(0).rstrip(".,)") if m else None
 
 
+def descargar(url: str) -> tuple[str, str]:
+    """Descarga y limpia el HTML publico de un topic. Devuelve (contenido, procedencia).
+
+    Usa esta funcion cuando la URL del topic ya fue localizada por otro medio
+    (por ejemplo, WebSearch dentro de un skill de Claude Code) y no hace falta
+    volver a buscarla con la herramienta de busqueda de la API de Anthropic.
+    """
+    try:
+        html = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0"}).text
+    except requests.RequestException as e:
+        log(f"no se pudo descargar el topic base: {e}")
+        return "", f"sin base (fallo de descarga: {e})"
+
+    texto = re.sub(r"<script.*?</script>|<style.*?</style>", " ", html, flags=re.S)
+    texto = re.sub(r"<[^>]+>", "\n", texto)
+    texto = re.sub(r"\n{3,}", "\n\n", texto)
+    oculto = texto.count("login to view")
+    log(f"base publica: {url} ({oculto} bloques tras login)")
+    return texto.strip(), f"version publica de {url} — {oculto} bloques ocultos tras login"
+
+
 def cargar_base(tema: str, ruta: str | None) -> tuple[str, str]:
     """Devuelve (contenido, procedencia)."""
     if ruta:
@@ -32,15 +53,4 @@ def cargar_base(tema: str, ruta: str | None) -> tuple[str, str]:
         log("sin topic base — la ficha se construira solo desde literatura")
         return "", "sin base"
 
-    try:
-        html = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0"}).text
-    except requests.RequestException as e:
-        log(f"no se pudo descargar el topic base: {e}")
-        return "", "sin base (fallo de descarga)"
-
-    texto = re.sub(r"<script.*?</script>|<style.*?</style>", " ", html, flags=re.S)
-    texto = re.sub(r"<[^>]+>", "\n", texto)
-    texto = re.sub(r"\n{3,}", "\n\n", texto)
-    oculto = texto.count("login to view")
-    log(f"base publica: {url} ({oculto} bloques tras login)")
-    return texto.strip(), f"version publica de {url} — {oculto} bloques ocultos tras login"
+    return descargar(url)
