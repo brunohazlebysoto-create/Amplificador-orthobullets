@@ -1,0 +1,62 @@
+{
+  "atresia-de-vias-biliares-ejemplo": {
+    "actualizado": "2026-08-05T13:44:20",
+    "agregados": 2,
+    "archivo": "cirugia-pediatrica-general/hepatobiliar/atresia-de-vias-biliares-ejemplo.md",
+    "categoria": [
+      "Cirugia pediatrica general",
+      "Hepatobiliar"
+    ],
+    "citas_inexistentes": 0,
+    "citas_no_verificables": 0,
+    "creado": "2026-08-05T13:43:28",
+    "extra_consultas": [],
+    "modelo": "claude-code (skill ficha-medica-orthobullets)",
+    "num_referencias": 2,
+    "procedencia": "sin base, ilustrativo",
+    "refs_archivo": "cirugia-pediatrica-general/hepatobiliar/atresia-de-vias-biliares-ejemplo.refs.json",
+    "slug": "atresia-de-vias-biliares-ejemplo",
+    "tema": "Atresia de vias biliares [EJEMPLO]",
+    "version": 2
+  },
+  "fractura-supracondilea-de-humero-ejemplo": {
+    "actualizado": "2026-08-05T13:44:20",
+    "agregados": 2,
+    "archivo": "pediatria-ortopedica/trauma/extremidad-superior/fractura-supracondilea-de-humero-ejemplo.md",
+    "categoria": [
+      "Pediatria ortopedica",
+      "Trauma",
+      "Extremidad superior"
+    ],
+    "citas_inexistentes": 0,
+    "citas_no_verificables": 1,
+    "creado": "2026-08-05T13:44:20",
+    "extra_consultas": [],
+    "modelo": "claude-code (skill ficha-medica-orthobullets)",
+    "num_referencias": 2,
+    "procedencia": "ejemplo, sin verificacion",
+    "refs_archivo": "pediatria-ortopedica/trauma/extremidad-superior/fractura-supracondilea-de-humero-ejemplo.refs.json",
+    "slug": "fractura-supracondilea-de-humero-ejemplo",
+    "tema": "Fractura supracondilea de humero [EJEMPLO]",
+    "version": 1
+  },
+  "pie-equino-varo-congenito-ejemplo": {
+    "actualizado": "2026-08-05T13:43:27",
+    "agregados": 2,
+    "archivo": "pediatria-ortopedica/pie-y-tobillo/pie-equino-varo-congenito-ejemplo.md",
+    "categoria": [
+      "Pediatria ortopedica",
+      "Pie y tobillo"
+    ],
+    "citas_inexistentes": 0,
+    "creado": "2026-08-05T13:43:27",
+    "extra_consultas": [],
+    "modelo": "claude-code (skill ficha-medica-orthobullets)",
+    "num_referencias": 3,
+    "procedencia": "ejemplo, sin verificacion",
+    "refs_archivo": "pediatria-ortopedica/pie-y-tobillo/pie-equino-varo-congenito-ejemplo.refs.json",
+    "slug": "pie-equino-varo-congenito-ejemplo",
+    "tema": "Pie equino varo congenito [EJEMPLO]",
+    "version": 1
+  }
+}

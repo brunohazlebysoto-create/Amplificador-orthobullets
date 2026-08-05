@@ -51,6 +51,7 @@ class Catalogo:
             "extra_consultas": extra,
             "num_referencias": n_refs,
             "citas_inexistentes": len(verificacion.get("inexistentes", [])),
+            "citas_no_verificables": len(verificacion.get("no_verificables_por_red", [])),
             "agregados": verificacion.get("agregados", 0),
             "creado": previa["creado"] if previa else ahora,
             "actualizado": ahora,

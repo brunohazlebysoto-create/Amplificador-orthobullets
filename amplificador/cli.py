@@ -2,6 +2,8 @@ import argparse
 import json
 from pathlib import Path
 
+import requests
+
 from . import gemini_client
 from .catalog import Catalogo
 from .orthobullets import cargar_base, descargar
@@ -9,6 +11,7 @@ from .pubmed import bibliografia, buscar_pmids, detalles
 from .redaccion import redactar, PROMPT_DEFECTO
 from .utils import log, slugify
 from .verificacion import verificar_citas
+from .webview import exportar as exportar_web
 
 
 def _categoria_desde_texto(texto: str | None) -> list[str]:
@@ -130,12 +133,20 @@ def _rutas(args: argparse.Namespace) -> None:
 
 
 def _pubmed_buscar(args: argparse.Namespace) -> None:
-    ids = buscar_pmids(args.consulta, args.n)
+    try:
+        ids = buscar_pmids(args.consulta, args.n)
+    except requests.exceptions.RequestException as e:
+        print(json.dumps({"error": f"no se pudo consultar PubMed: {e}"}, ensure_ascii=False))
+        raise SystemExit(1)
     print(json.dumps(ids, ensure_ascii=False))
 
 
 def _pubmed_detalles(args: argparse.Namespace) -> None:
-    refs = detalles(args.pmids)
+    try:
+        refs = detalles(args.pmids)
+    except requests.exceptions.RequestException as e:
+        print(json.dumps({"error": f"no se pudo consultar PubMed: {e}"}, ensure_ascii=False))
+        raise SystemExit(1)
     print(json.dumps(refs, ensure_ascii=False, indent=2))
 
 
@@ -176,6 +187,14 @@ def _registrar(args: argparse.Namespace) -> None:
     entrada = catalogo.registrar(args.tema, categoria, args.procedencia, args.modelo,
                                   args.extra or [], len(refs), ficha_ruta, refs_ruta, reporte)
     print(json.dumps({"entrada": entrada, "verificacion": reporte}, ensure_ascii=False, indent=2))
+
+
+def _exportar_web(args: argparse.Namespace) -> None:
+    raiz = Path(args.salida)
+    destino = Path(args.destino) if args.destino else raiz / "index.html"
+    ruta = exportar_web(raiz, destino)
+    n = len(Catalogo(raiz).entradas)
+    print(f"Pagina generada: {ruta} ({n} fichas)")
 
 
 def main() -> None:
@@ -263,6 +282,12 @@ def main() -> None:
     rg.add_argument("--extra", action="append", default=None)
     rg.add_argument("--salida", default="temas")
     rg.set_defaults(func=_registrar)
+
+    ew = sub.add_parser("exportar-web",
+                        help="genera una pagina HTML autocontenida para navegar el catalogo")
+    ew.add_argument("--salida", default="temas", help="carpeta del catalogo (catalogo.json)")
+    ew.add_argument("--destino", default=None, help="ruta del HTML de salida (default: <salida>/index.html)")
+    ew.set_defaults(func=_exportar_web)
 
     args = ap.parse_args()
     args.func(args)
