@@ -7,8 +7,9 @@ import requests
 from . import gemini_client
 from .catalog import Catalogo
 from .orthobullets import cargar_base, descargar
+from .pipeline import generar_ficha
 from .pubmed import bibliografia, buscar_pmids, detalles
-from .redaccion import redactar, PROMPT_DEFECTO
+from . import server as servidor_web
 from .utils import log, slugify
 from .verificacion import verificar_citas
 from .webview import exportar as exportar_web
@@ -21,36 +22,13 @@ def _categoria_desde_texto(texto: str | None) -> list[str]:
 
 
 def _generar(args: argparse.Namespace) -> None:
-    prompt_sistema = (
-        Path(args.prompt).read_text(encoding="utf-8")
-        if args.prompt else PROMPT_DEFECTO.read_text(encoding="utf-8")
-    )
     categoria = _categoria_desde_texto(args.categoria)
+    entrada, reporte = generar_ficha(
+        args.tema, categoria, base=args.base, extra=args.extra, n=args.n,
+        modelo=args.modelo, prompt=args.prompt, salida=args.salida)
 
-    log("1/4 topic base")
-    base, procedencia = cargar_base(args.tema, args.base)
-
-    log("2/4 bibliografia")
-    refs = bibliografia(args.tema, args.extra, args.n)
-    log(f"    {len(refs)} referencias con metadatos")
-
-    log("3/4 redaccion")
-    ficha = redactar(args.tema, base, procedencia, refs, prompt_sistema, args.modelo)
-
-    log("4/4 verificacion de citas")
-    reporte = verificar_citas(ficha, refs)
-
-    catalogo = Catalogo(Path(args.salida))
-    ficha_ruta, refs_ruta = catalogo.rutas(args.tema, categoria)
-    ficha_ruta.write_text(ficha, encoding="utf-8")
-    refs_ruta.write_text(
-        json.dumps({"tema": args.tema, "procedencia": procedencia,
-                    "referencias": refs, "verificacion": reporte},
-                   ensure_ascii=False, indent=2),
-        encoding="utf-8")
-
-    entrada = catalogo.registrar(args.tema, categoria, procedencia, args.modelo,
-                                  args.extra, len(refs), ficha_ruta, refs_ruta, reporte)
+    ficha_ruta = Path(args.salida) / entrada["archivo"]
+    refs_ruta = Path(args.salida) / entrada["refs_archivo"]
 
     print(f"\nFicha:    {ficha_ruta}")
     print(f"Refs:     {refs_ruta}")
@@ -197,6 +175,10 @@ def _exportar_web(args: argparse.Namespace) -> None:
     print(f"Pagina generada: {ruta} ({n} fichas)")
 
 
+def _servir(args: argparse.Namespace) -> None:
+    servidor_web.ejecutar(Path(args.salida), host=args.host, puerto=args.puerto)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(
         prog="amplificador",
@@ -288,6 +270,13 @@ def main() -> None:
     ew.add_argument("--salida", default="temas", help="carpeta del catalogo (catalogo.json)")
     ew.add_argument("--destino", default=None, help="ruta del HTML de salida (default: <salida>/index.html)")
     ew.set_defaults(func=_exportar_web)
+
+    sv = sub.add_parser("servir",
+                        help="levanta un servidor local con formulario para pedir fichas nuevas")
+    sv.add_argument("--salida", default="temas", help="carpeta del catalogo (catalogo.json)")
+    sv.add_argument("--host", default="127.0.0.1")
+    sv.add_argument("--puerto", type=int, default=8420)
+    sv.set_defaults(func=_servir)
 
     args = ap.parse_args()
     args.func(args)

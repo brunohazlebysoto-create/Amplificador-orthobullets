@@ -39,7 +39,9 @@ amplificador/
   redaccion.py           arma el prompt final y redacta la ficha
   verificacion.py         valida que los PMID citados existan
   catalog.py               indice jerarquico de fichas generadas
-  webview.py                genera la pagina web del catalogo (autocontenida)
+  pipeline.py               logica de generar_ficha, compartida por CLI y servidor
+  webview.py                genera la pagina web estatica del catalogo
+  server.py                 servidor local con formulario para pedir fichas nuevas
   prompts/prompt_sistema.md  prompt de sistema (rol, esqueleto, reglas)
 temas/                     fichas generadas + catalogo.json + index.html (se crean al usar la CLI)
 .claude/commands/
@@ -158,6 +160,31 @@ PubMed y esos PMID no existen: revisa la ficha antes de confiar en ella).
 
 Vuelve a correr `exportar-web` cada vez que generes, actualices o muevas
 una ficha para refrescar la pagina.
+
+### Pedir una ficha nueva desde la pagina web
+
+`exportar-web` genera una foto estatica de lo que ya existe; no tiene forma
+de disparar una generacion nueva. Para eso esta el servidor local:
+
+```bash
+python -m amplificador servir
+```
+
+Abre `http://127.0.0.1:8420`. Es la misma interfaz de navegacion, mas un
+boton **+ Nueva ficha**: completas tema, categoria opcional, consultas
+extra de PubMed y el maximo de referencias, y al enviar el formulario se
+dispara el pipeline real (`generar`) en un hilo en segundo plano — busca el
+topic base, arma bibliografia verificada en PubMed y redacta con la API de
+Anthropic. El progreso se ve en vivo (los mismos mensajes que verias en la
+terminal con `generar`), y cuando termina la pagina se refresca sola y
+abre la ficha nueva. Si algo falla (por ejemplo, falta la clave de
+Anthropic o no hay conexion), el error queda mostrado en el propio panel
+en vez de perderse en una terminal.
+
+Solo escucha en `127.0.0.1` por defecto: el formulario dispara llamadas
+con costo real a la API de Anthropic, asi que no lo expongas a una red
+compartida (`--host`) sin agregarle autenticacion antes. Cambia el puerto
+con `--puerto` si el 8420 esta ocupado.
 
 ## Notas
 
